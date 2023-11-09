@@ -1,5 +1,5 @@
 import { Router } from "express";
-import CartManager from "../../dao/CartManager.js";
+import mongoose from "mongoose";
 import cartModel from "../../models/cart.model.js";
 
 const router = Router();
@@ -29,13 +29,27 @@ router.get('/cart/:cid', async (req, res) => {
 //Ruta para borrar los carritos desde el navegador
 router.post('/removeFromCart', async (req, res) => {
     const { cartId, productId } = req.body;
+    const validProductId = mongoose.isValidObjectId(productId) ? new mongoose.Types.ObjectId(productId) : null;
+
     try {
-        await CartManager.removeProductFromCart(cartId, productId);
+        if (!validProductId) {
+            return res.status(400).json({ error: 'El productId proporcionado no es válido.' });
+        }
+        const cart = await cartModel.findById(cartId);
+        if (!cart) {
+            return res.status(404).json({ error: 'No se encontró el carrito.' });
+        }
+        const productIndex = cart.products.findIndex(product => product.productId.equals(validProductId));
+        if (productIndex === -1) {
+            return res.status(404).json({ error: 'No se encontró el producto en el carrito.' });
+        }
+        cart.products.splice(productIndex, 1);
+        await cart.save();
         console.log('Producto eliminado del carrito');
         res.redirect('/api/carts');
     } catch (error) {
         console.error('Error al eliminar producto del carrito', error.message);
-        res.status(500).json({ error: 'Error al eliminar producto del carrito' });
+        res.status(500).json({ error: `Error al eliminar producto del carrito: ${error.message}` });
     }
 });
 
